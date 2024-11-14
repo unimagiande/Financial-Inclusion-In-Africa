@@ -1,0 +1,277 @@
+# Suppress warnings for cleaner output
+import warnings
+warnings.filterwarnings('ignore')
+
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+# Loading the dataset
+df = pd.read_csv("Financial_inclusion_dataset.csv")
+
+# Overview of the dataset
+df.head()
+
+df.shape
+
+df.info()
+
+# Summary statistics
+df.describe()
+
+# Checking for missing values and duplicates
+df.isnull().sum()
+
+df.duplicated().sum()
+
+# Encoding
+# Binary Variables
+df['bank_account'].value_counts()
+
+df['location_type'].value_counts()
+
+df['cellphone_access'].value_counts()
+
+df['gender_of_respondent'].value_counts()
+
+# Binary Encoding of Binary variables
+df['bank_account'] = df['bank_account'].map({'Yes': 1, 'No': 0})
+df['cellphone_access'] = df['cellphone_access'].map({'Yes': 1, 'No': 0})
+df['gender_of_respondent'] = df['gender_of_respondent'].map({'Female': 0, 'Male': 1})
+df['location_type'] = df['location_type'].map({'Rural': 0, 'Urban': 1})
+
+# Multi-category Variables
+df['marital_status'].value_counts()
+
+df['education_level'].value_counts()
+
+df['job_type'].value_counts()
+
+# One-Hot Encoding for multi-category variables
+df = pd.get_dummies(df, columns=['job_type'], drop_first=True)
+df.head()
+
+# Feature Engineering
+df.columns
+
+df['has_income'] = df[['job_type_Farming and Fishing', 'job_type_Formally employed Government', 'job_type_Formally employed Private', 
+                       'job_type_Informally employed', 'job_type_Other Income', 'job_type_Self employed'  ]].sum(axis=1)
+
+df['is_married'] = df['marital_status'].apply(lambda x: 1 if x == 'Married/Living together' else 0)
+df['is_single'] = df['marital_status'].apply(lambda x: 1 if x == 'Single/Never Married' else 0)
+
+# Creating binary columns for each education level
+df['primary_education'] = df['education_level'].apply(lambda x: 1 if x == 'Primary education' else 0)
+df['no_education'] = df['education_level'].apply(lambda x: 1 if x == 'No formal education' else 0)
+df['secondary_education'] = df['education_level'].apply(lambda x: 1 if x == 'Secondary education' else 0)
+df['tertiary_education'] = df['education_level'].apply(lambda x: 1 if x == 'Tertiary education' else 0)
+df['vocational_training'] = df['education_level'].apply(lambda x: 1 if x == 'Vocational/Specialised training' else 0)
+df['other_education'] = df['education_level'].apply(lambda x: 1 if x == 'Other/Dont know/RTA' else 0)
+
+# Correlation matrix to check linear relationship
+
+# Selecting only numeric columns for correlation
+numeric_df = df.select_dtypes(include=[float, int])
+correlation_matrix = numeric_df.corr()
+
+correlation_matrix
+
+# Variance Threshold to eliminate low variance features
+from sklearn.feature_selection import VarianceThreshold
+
+# Separate the features (X) and the target variable (y)
+X = df.drop(columns=['country', 'uniqueid', 'gender_of_respondent', 'relationship_with_head', 'marital_status', 'education_level', 'bank_account'])
+y = df['bank_account']
+
+# Create the VarianceThreshold object with a specified threshold
+selector = VarianceThreshold(threshold=0.1)
+
+# Fit the model on the feature data
+X_var_thresh = selector.fit_transform(X)
+
+# Check which features remain
+remaining_features = X.columns[selector.get_support()]
+print(remaining_features)
+
+# Modelling
+# Logistic Regression(Lasso- Least Absolute Shrinkage and Selection Operator) Embedded Method
+# To select my best features
+from sklearn.linear_model import LogisticRegression
+# Selecting my features and splitting the data into training and test sets
+
+X = df.drop(columns=['year', 'country', 'uniqueid', 'gender_of_respondent', 'relationship_with_head', 'marital_status', 
+                    'education_level', 'vocational_training', 'bank_account', 'job_type_Remittance Dependent',])
+
+y = df['bank_account']
+
+X_train,X_test,y_train,y_test = train_test_split(X,y, test_size = 0.2, random_state =42)
+
+print(X_train.columns)
+
+# Using the logistic regression model with a penalty = l1 which is used to reduce loss or error in the model
+model= LogisticRegression(penalty = 'l1', C = 1.0, solver = 'liblinear')
+model.fit(X_train,y_train)
+
+y_pred = model.predict(X_test)
+
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+ACC = accuracy_score(y_pred, y_test)
+ACC
+
+conf_mat = confusion_matrix(y_pred, y_test)
+conf_mat
+
+class_report = classification_report(y_pred, y_test)
+print(class_report)
+
+model.coef_
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define the figure and axis
+fig = plt.figure()
+ax = plt.subplot(111)
+
+# 28 color definitions
+colors = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 
+          'black', 'pink', 'lightgreen', 'lightblue', 'gray', 
+          'indigo', 'orange', 'salmon', 'purple', 'gold', 
+          'silver', 'brown', 'violet', 'lime', 'teal', 
+          'navy', 'maroon', 'olive', 'coral', 'chocolate', 
+          'crimson', 'darkblue']
+
+weights, params = [], []
+
+# Loop through regularization strengths
+for c in np.arange(-4., 6.):
+    model2 = LogisticRegression(penalty='l1', C=10.**c, solver='liblinear', random_state=42)
+    model2.fit(X_train, y_train)
+    weights.append(model2.coef_)
+    params.append(10**c)
+
+weights = np.array(weights)
+# Plot each column's weights using the color list
+for column, color in zip(range(weights.shape[2]), colors):  # Use shape[2] for correct column size
+    plt.plot(params, weights[:, 0, column],  # Access weights by [:, 0, column] for 2D plot
+             label=X.columns[column],  # Ensure X.columns has the right size
+             color=color)
+
+# Add horizontal line at y=0
+plt.axhline(0, color='black', linestyle='--', linewidth=3)
+plt.xlim([10**(-5), 10**5])
+plt.ylabel('Weight coefficient')
+plt.xlabel('C (inverse regularization strength)')
+plt.xscale('log')
+plt.legend(loc='upper left')
+
+# Set the position of the legend
+ax.legend(loc='upper center', bbox_to_anchor=(1.38, 1.03), ncol=1, fancybox=True)
+
+# Save the figure
+plt.savefig('lasso-path.pdf', dpi=300, bbox_inches='tight', pad_inches=0.2)
+
+# Show the plot
+plt.show()
+
+# Saving my model
+import joblib
+
+joblib.dump(model, 'financialinclusionmodel.pkl')
+
+# Create The Streamlit App
+# Create the file Expresso_Churn_Prediction_Streamlit_App.py in write mode
+with open("Financial_Inclusion_Prediction_Streamlit_App.py", "w") as file:
+    # Writing the Streamlit code into the file
+    file.write("""
+# Import necessary libraries
+import streamlit as st
+import pandas as pd
+import joblib
+
+# Title for the web app
+st.title('Financial Inclusion Prediction in Africa')
+
+# Load the trained model
+model = joblib.load("financialinclusionmodel.pkl")  
+
+# Input features from the user
+st.header('Input Features')
+
+location_type = st.selectbox('Location Type', ['Rural', 'Urban'])
+cellphone_access = st.selectbox('Cellphone Access', ['Yes', 'No'])
+household_size = st.number_input('Household Size', min_value=1, max_value=10, value=3)
+age_of_respondent = st.number_input('Age of Respondent', min_value=18, max_value=100, value=30)
+is_married = st.selectbox('Marital Status', ['Married', 'Single'])
+has_income = st.selectbox('Has Income?', ['Yes', 'No'])
+
+# Job type selection
+job_types = [
+    'Farming and Fishing',
+    'Formally employed Government',
+    'Formally employed Private',
+    'Government Dependent',
+    'Informally employed',
+    'No Income',
+    'Other Income',
+    'Self employed'
+]
+
+# Select job type
+selected_job_type = st.selectbox('Job Type', job_types)
+
+# Education level features (since it's already binary-encoded)
+primary_education = st.checkbox('Primary Education')
+no_education = st.checkbox('No Formal Education')
+secondary_education = st.checkbox('Secondary Education')
+tertiary_education = st.checkbox('Tertiary Education')
+other_education = st.checkbox('Other Education')
+
+# Create a dictionary for the model input
+input_data = {
+    'location_type': [1 if location_type == 'Urban' else 0],
+    'cellphone_access': [1 if cellphone_access == 'Yes' else 0],
+    'household_size': [household_size],
+    'age_of_respondent': [age_of_respondent],
+    'job_type_Farming and Fishing': [1 if selected_job_type == 'Farming and Fishing' else 0],
+    'job_type_Formally employed Government': [1 if selected_job_type == 'Formally employed Government' else 0],
+    'job_type_Formally employed Private': [1 if selected_job_type == 'Formally employed Private' else 0],
+    'job_type_Government Dependent': [1 if selected_job_type == 'Government Dependent' else 0],
+    'job_type_Informally employed': [1 if selected_job_type == 'Informally employed' else 0],
+    'job_type_No Income': [1 if selected_job_type == 'No Income' else 0],
+    'job_type_Other Income': [1 if selected_job_type == 'Other Income' else 0],
+    'job_type_Self employed': [1 if selected_job_type == 'Self employed' else 0],
+    'has_income': [1 if has_income == 'Yes' else 0],
+    'is_married': [1 if is_married == 'Married' else 0],
+    'is_single': [1 if is_married == 'Single' else 0],  # Adjusted for logical consistency
+    'primary_education': [1 if primary_education else 0],
+    'no_education': [1 if no_education else 0],
+    'secondary_education': [1 if secondary_education else 0],
+    'tertiary_education': [1 if tertiary_education else 0],
+    'other_education': [1 if other_education else 0]
+}
+
+# Convert input data to dataframe
+input_df = pd.DataFrame(input_data)
+
+# Display the input data
+st.subheader('Input Data')
+st.write(input_df)
+
+# Prediction
+if st.button('Predict'):
+    prediction = model.predict(input_df)
+    prediction_prob = model.predict_proba(input_df)
+    
+    if prediction[0] == 1:
+        st.success(f"The model predicts that this individual has a bank account with {prediction_prob[0][1] * 100:.2f}% probability.")
+    else:
+        st.error(f"The model predicts that this individual does NOT have a bank account with {prediction_prob[0][0] * 100:.2f}% probability.")
+""")
+
